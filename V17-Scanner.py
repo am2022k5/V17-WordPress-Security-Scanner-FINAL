@@ -1,115 +1,72 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-V17 WordPress Security Scanner - FINAL EDITION
-Built in Al Kut, Wasit, Iraq 🇮🇶
-By am2022k5
-500+ Security Checks - XSS, SQLi, RCE, LFI, SSRF
-"""
-
 import requests
 import re
 import sys
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin
 from datetime import datetime
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# الألوان
 GREEN = '\033[92m'
 RED = '\033[91m'
 YELLOW = '\033[93m'
 CYAN = '\033[96m'
 RESET = '\033[0m'
 
-print(f"""
-{CYAN}
-██╗   ██╗ ██╗███████╗
-██║   ██║███║╚════██║
-██║   ██║╚██║    ██╔╝
-╚██╗ ██╔╝ ██║   ██╔╝ 
- ╚████╔╝  ██║   ██║  
-  ╚═══╝   ╚═╝   ╚═╝  
-WordPress Security Scanner V17 - FINAL
-Built in Al Kut, Iraq 🇮🇶 - am2022k5
-{RESET}
-""")
+def banner():
+    print(f"""{CYAN}
+ ██    ██  ██ ████████ 
+ ██    ██ ███    ██    
+ ██    ██  ██    ██    
+  ██  ██   ██    ██    
+   ████    ██    ██    
+    ██     ██    ██    
+WordPress Security Scanner V17.1 - FINAL
+Built in Al Kut, Iraq IQ - am2022k5
+{RESET}""")
 
 def scan_target(url):
-    print(f"{YELLOW}[*] Scanning: {url}{RESET}")
+    if not url.startswith('http'):
+        url = 'https://' + url
+    target = url.rstrip('/')
+    print(f"{YELLOW}[*] Scanning: {target}{RESET}")
     print(f"{YELLOW}[*] Time: {datetime.now()}{RESET}\n")
-    
     vulns = []
-    
-    # 1. WordPress Version Disclosure
     try:
-        r = requests.get(url, timeout=10, headers={'User-Agent': 'V17-Scanner'})
-        if 'wp-' in r.text or 'wordpress' in r.text.lower():
+        r = requests.get(target, timeout=20, verify=False)
+        if 'wp-' in r.text or 'wordpress' in r.text or 'wp-content' in r.text:
             print(f"{GREEN}[+] WordPress Detected!{RESET}")
-            
-        # Check readme.html
-        readme = urljoin(url, '/readme.html')
-        rr = requests.get(readme, timeout=5)
+        readme = urljoin(target, '/readme.html')
+        rr = requests.get(readme, timeout=15, verify=False)
         if rr.status_code == 200 and 'WordPress' in rr.text:
             ver = re.findall(r'Version (\d+\.\d+\.\d+)', rr.text)
             if ver:
-                print(f"{RED}[!] WordPress Version Exposed: {ver[0]} - {readme}{RESET}")
+                print(f"{RED}[!] WordPress Version: {ver[0]}{RESET}")
                 vulns.append(f"Version Disclosure: {ver[0]}")
+        checks = ['/wp-config.php~', '/wp-config.php.bak', '/wp-config.bak', '/.env', '/.git/config', '/debug.log']
+        for path in checks:
+            try:
+                cr = requests.get(urljoin(target, path), timeout=15, verify=False)
+                if cr.status_code == 200 and len(cr.text) > 10 and len(cr.text) < 5000:
+                    if 'DB_PASSWORD' in cr.text or 'DB_NAME' in cr.text or '<?php' in cr.text:
+                        print(f"{RED}[!!!] CRITICAL FILE EXPOSED: {path}{RESET}")
+                        vulns.append(f"Exposed: {path}")
+            except: pass
+        users_url = urljoin(target, '/wp-json/wp/v2/users')
+        ur = requests.get(users_url, timeout=15, verify=False)
+        if ur.status_code == 200 and 'slug' in ur.text:
+            print(f"{RED}[!] User Enumeration Possible: /wp-json/wp/v2/users{RESET}")
+            vulns.append("User Enumeration")
     except Exception as e:
         print(f"{RED}[-] Error: {e}{RESET}")
-
-    # 2. Check common vulnerable files
-    checks = [
-        '/wp-config.php~', '/wp-config.php.bak', '/wp-config.php.old',
-        '/.env', '/.git/config', '/debug.log', '/wp-content/debug.log',
-        '/xmlrpc.php', '/wp-json/wp/v2/users', '/wp-includes/',
-        '/wp-content/uploads/', '/license.txt', '/wp-cron.php'
-    ]
-    
-    for path in checks:
-        try:
-            full = urljoin(url, path)
-            res = requests.get(full, timeout=5)
-            if res.status_code == 200 and len(res.text) > 0:
-                if '404' not in res.text[:100]:
-                    print(f"{RED}[!] Exposed File: {full} [{res.status_code}]{RESET}")
-                    vulns.append(full)
-        except:
-            pass
-
-    # 3. XSS Check - Simple Reflection
-    xss_payload = "<script>alert('V17')</script>"
-    try:
-        test_url = f"{url}?s={xss_payload}"
-        rx = requests.get(test_url, timeout=5)
-        if xss_payload in rx.text:
-            print(f"{RED}[!!!] Potential Reflected XSS: {test_url}{RESET}")
-            vulns.append("Reflected XSS")
-    except:
-        pass
-
-    # 4. User Enumeration
-    try:
-        users_url = urljoin(url, '/wp-json/wp/v2/users')
-        ru = requests.get(users_url, timeout=5)
-        if ru.status_code == 200 and 'slug' in ru.text:
-            print(f"{RED}[!] User Enumeration: {users_url}{RESET}")
-            print(f"    {ru.text[:200]}")
-            vulns.append("User Enumeration")
-    except:
-        pass
-
-    print(f"\n{CYAN}========== SCAN FINISHED =========={RESET}")
+    print(f"\n{CYAN}=========== SCAN FINISHED ==========={RESET}")
     print(f"{YELLOW}Found {len(vulns)} potential issues{RESET}")
-    for v in vulns:
-        print(f" - {v}")
-    print(f"{GREEN}Built with pride in Al Kut, Wasit, Iraq 🇮🇶{RESET}")
+    print(f"{GREEN}Built with pride in Al Kut, Wasit, Iraq | am2022k5{RESET}")
+    return vulns
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        target = input(f"{CYAN}Enter Target URL (https://example.com): {RESET}")
+    banner()
+    if len(sys.argv) > 1:
+        scan_target(sys.argv[1])
     else:
-        target = sys.argv[1]
-    
-    if not target.startswith('http'):
-        target = 'https://' + target
-    
-    scan_target(target)
+        t = input(f"{CYAN}Enter Target URL: {RESET}")
+        scan_target(t)
