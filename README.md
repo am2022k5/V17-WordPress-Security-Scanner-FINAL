@@ -1,2 +1,5 @@
-# V17-WordPress-Security-Scanner-FINAL
-🔥 The Ultimate WordPress Security Scanner V17 - Built in Al Kut, Iraq 🇮🇶 - 500+ Checks - XSS, SQLi, RCE Detection
+# V17 WordPress Security Scanner - By Abbas From Al Kut 🇮🇶
+
+Built with pride in Al Kut, Wasit, Iraq - Abbas | am2022k5
+
+The Ultimate Scanner - 500+ Checks
